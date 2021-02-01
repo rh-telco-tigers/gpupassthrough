@@ -1,0 +1,23 @@
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfig
+metadata:
+  name: 55-vfio-gpu
+  labels:
+    machineconfiguration.openshift.io/role: worker
+spec:
+    config:
+      ignition:
+        version: 3.1.0
+      storage:
+        files:
+          - contents:
+              source: >-
+                data:text/plain;charset=utf-8;base64,b3B0aW9ucyB2ZmlvLXBjaSBpZHM9MTBkZToxZGI0Cg==
+            mode: 0644
+            overwrite: true
+            path: /etc/modprobe.d/gpu-vfio.conf
+          - contents:
+              source: 'data:,vfio-pci'
+            mode: 0644
+            overwrite: true
+            path: /etc/modules-load.d/gpu-vfio.conf
