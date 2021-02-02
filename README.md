@@ -72,7 +72,7 @@ GPU Passthrough to virtualized machines is not yet supported in OpenShift Viruta
 # Pick an upstream version of KubeVirt to install
 $ export RELEASE=v0.37.1
 # Deploy the KubeVirt operator
-$ kubectl apply -f https://github.com/kubevirt/kubevirt/releases/download/${RELEASE}/kubevirt-operator.yaml
+$ oc apply -f https://github.com/kubevirt/kubevirt/releases/download/${RELEASE}/kubevirt-operator.yaml
 ```
 
 We will create a custom kubevirt-cr to deploy kubevirt into our cluster. This will allow us to enable the GPU feature gate as well as enable the kubevirt device manager to handle the GPU device we are going to pass through. Create kubevirt-cr.yaml with contents below. For each card type you want to support create a new pciVendorSelector section. The resourceName is arbitrary, but should reflect the card you are connecting to, to simplify things down the line. The below code shows two devices configured.
@@ -91,9 +91,9 @@ permittedHostDevices:
 Now we will apply the configuration and wait for the install/configuration to complete:
 
 ```
-$ kubectl apply -f kubevirt-cr.yaml
+$ oc apply -f kubevirt-cr.yaml
 # wait until all KubeVirt components are up
-$ kubectl -n kubevirt wait kv kubevirt --for condition=Available
+$ oc -n kubevirt wait kv kubevirt --for condition=Available
 ```
 
 To validate that the kubevirt device manager has successfully configured/recognized the cards, run the following oc command and look for the "resourceName" to be listed in the "Capacity" section and the "Allocatable" section as shown below:
@@ -136,24 +136,26 @@ The Containerized Data Importer (CDI) is used to help make virtual machine creat
 
 ```
 $ export VERSION=$(curl -s https://github.com/kubevirt/containerized-data-importer/releases/latest | grep -o "v[0-9]\.[0-9]*\.[0-9]*")
-$ kubectl create -f https://github.com/kubevirt/containerized-data-importer/releases/download/$VERSION/cdi-operator.yaml
-$ kubectl create -f https://github.com/kubevirt/containerized-data-importer/releases/download/$VERSION/cdi-cr.yaml
+$ oc create -f https://github.com/kubevirt/containerized-data-importer/releases/download/$VERSION/cdi-operator.yaml
+$ oc create -f https://github.com/kubevirt/containerized-data-importer/releases/download/$VERSION/cdi-cr.yaml
 ```
 
 ## Setup Storage 
 
-You will need storage to run your vm from. This can be done with any CSI storage provider. The notes below are for setting up NFS or hostPath provisioner.
+You will need storage to run your vm from. This can be done with any CSI storage provider. The notes below are for setting up NFS or hostPath provisioner. 
 
 ### NFS Client Storage
 
 Clone this: https://github.com/kubernetes-sigs/nfs-subdir-external-provisioner
 
+```
 $ oc new-project nfs-provisioner
 $ NAMESPACE=`oc project -q`
 $ sed -i'' "s/namespace:.*/namespace: $NAMESPACE/g" ./deploy/rbac.yaml
 $ oc create -f deploy/rbac.yaml
 $ oc create role use-scc-hostmount-anyuid --verb=use --resource=scc --resource-name=hostmount-anyuid -n $NAMESPACE
 $ oc adm policy add-role-to-user use-scc-hostmount-anyuid system:serviceaccount:$NAMESPACE:nfs-client-provisioner
+```
 
 ### HostPath Provisoner
 
@@ -236,5 +238,7 @@ For the hardware tested for this document (V100) the drivers are not auto-instal
 
 If you enable RDP from within the WIndows VIrtual machine, it is possible to directly connect to that VM using RDP through the exposure of the RDP service via a NodePort service.
 
-`virtctl expose virtualmachine win10vm1 --name windows-app-server-rdp --port 3389 --target-port 3389 --type NodePort`
+```
+$ virtctl expose virtualmachine win10vm1 --name windows-app-server-rdp --port 3389 --target-port 3389 --type NodePort
+```
 
