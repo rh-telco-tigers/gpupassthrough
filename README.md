@@ -39,39 +39,21 @@ $ echo "options vfio-pci ids=10DE:1DB4" | base64
 b3B0aW9ucyB2ZmlvLXBjaSBpZHM9MTBERToxREI0Cg==
 ```
 
-Using the base64 output from above create a new file called "vfioConfig.yaml" with the following contents:
+Using the base64 output from above update the storage section of the file called "template/vfioConfig.yaml" replacing the example base64 encoded string with the updated one from above.
 
 ```
-apiVersion: machineconfiguration.openshift.io/v1
-kind: MachineConfig
-metadata:
-  name: 55-vfio-gpu
-  labels:
-    machineconfiguration.openshift.io/role: worker
-spec:
-    config:
-      ignition:
-        version: 3.1.0
-      storage:
-        files:
-          - contents:
-              source: >-
-                data:text/plain;charset=utf-8;base64,b3B0aW9ucyB2ZmlvLXBjaSBpZHM9MTBkZToxZGI0Cg==
-            mode: 0644
-            overwrite: true
-            path: /etc/modprobe.d/gpu-vfio.conf
-          - contents:
-              source: 'data:,vfio-pci'
-            mode: 0644
-            overwrite: true
-            path: /etc/modules-load.d/gpu-vfio.conf
+storage:
+  files:
+    - contents:
+        source: >-
+          data:text/plain;charset=utf-8;base64,b3B0aW9ucyB2ZmlvLXBjaSBpZHM9MTBkZToxZGI0Cg==
 ```
 
 Be sure to update the contents source with the base64 string you got from the prior step.
 
 Log into your cluster with the oc command and then apply the vfioConfig.yaml file to your cluster:
 
-NOTE: This will reboot all your worker nodes one at a time.
+NOTE: This will reboot all your worker nodes one at a time to apply the changes.
 
 ```
 $ oc login <cluster name>
@@ -93,29 +75,17 @@ $ export RELEASE=v0.37.1
 $ kubectl apply -f https://github.com/kubevirt/kubevirt/releases/download/${RELEASE}/kubevirt-operator.yaml
 ```
 
-We will create a custom kubevirt-cr to deploy kubevirt into our cluster. This will allow us to enable the GPU feature gate as well as enable the kubevirt device manager to handle the GPU device we are going to pass through. Create kubevirt-cr.yaml with contents below. For each card type create a new pciVendorSelector section. The resourceName is arbitrary, but should reflect the card you are connecting to, to simplify things down the line.
+We will create a custom kubevirt-cr to deploy kubevirt into our cluster. This will allow us to enable the GPU feature gate as well as enable the kubevirt device manager to handle the GPU device we are going to pass through. Create kubevirt-cr.yaml with contents below. For each card type you want to support create a new pciVendorSelector section. The resourceName is arbitrary, but should reflect the card you are connecting to, to simplify things down the line. The below code shows two devices configured.
 
 ```
----
-apiVersion: kubevirt.io/v1
-kind: KubeVirt
-metadata:
-  name: kubevirt
-  namespace: kubevirt
-spec:
-  certificateRotateStrategy: {}
-  configuration:
-    developerConfiguration:
-      featureGates:
-      - GPU
-      - LiveMigration
-    permittedHostDevices:
-      pciHostDevices:
-      - pciVendorSelector: "10DE:1DB4"
-        resourceName: "nvidia.com/V100"
-        externalResourceProvider: true
-  customizeComponents: {}
-  imagePullPolicy: IfNotPresent
+permittedHostDevices:
+  pciHostDevices:
+  - pciVendorSelector: "10DE:1DB4"
+    resourceName: "nvidia.com/V100"
+    externalResourceProvider: false
+  - pciVendorSelector: "10DE:1234"
+    resourceName: "nvidia.com/AnotherCardType"
+    externalResourceProvider: false
 ```
 
 Now we will apply the configuration and wait for the install/configuration to complete:
@@ -242,7 +212,11 @@ set annotation on storage class "storageclass.kubernetes.io/is-default-class: tr
 
 ## Create new VM
 
-virtctl image-upload --uploadproxy-url=https://cdi-uploadproxy-openshift-cnv.apps.ocp4rhv.example.com dv iso-win10-dv --size=4Gi --image-path=/home/markd/en_windows_10_multiple_editions_x64_dvd_6846432.iso --insecure
+We will start by uploading a ISO boot cd to our cluster. We will use the virtctl command to upload the ISO image. This requires that you installed the CDI operator in previous steps.
+
+```
+$ virtctl image-upload --uploadproxy-url=https://cdi-uploadproxy-openshift-cnv.apps.ocp4rhv.example.com dv iso-win10-dv --size=4Gi --image-path=/home/markd/en_windows_10_multiple_editions_x64_dvd_6846432.iso --insecure
+```
 
 Using the file "templates/win10vm1-pvc.yaml" create a PVC to store your virtual machine hard disk on, updating your required disk size and storageClass you want to use.
 
