@@ -1,5 +1,28 @@
 # GPU Passthrough in OpenShift & Kubevirt
 
+## Table of Contents
+
+<!-- TOC -->
+- [GPU Passthrough in OpenShift & Kubevirt](#gpu-passthrough-in-openshift--kubevirt)
+  - [Table of Contents](#table-of-contents)
+  - [Introduction](#introduction)
+  - [Prerequisites](#prerequisites)
+  - [Configuring the bare metal GPU hosts for Passthrough](#configuring-the-bare-metal-gpu-hosts-for-passthrough)
+    - [Creating vfioConfig for pci passthrough](#creating-vfioconfig-for-pci-passthrough)
+  - [Install upstream kubevirt](#install-upstream-kubevirt)
+    - [Install Kubevirt from upstream](#install-kubevirt-from-upstream)
+    - [Install CDI Importer](#install-cdi-importer)
+  - [Setup Storage](#setup-storage)
+    - [NFS Client Storage](#nfs-client-storage)
+    - [HostPath Provisoner](#hostpath-provisoner)
+- [Deploying a Windows VM](#deploying-a-windows-vm)
+  - [Create new VM](#create-new-vm)
+  - [Windows 10 needs to be updated before the driver will install](#windows-10-needs-to-be-updated-before-the-driver-will-install)
+    - [Accessing a Windows VM directly via RDP](#accessing-a-windows-vm-directly-via-rdp)
+<!-- TOC -->
+
+## Introduction
+
 It is possible to support video card GPU passthrough using OpenShift and Kubevirt (upstream OpenShift Virtualization). The instructions below will help create a configuration that allows for running ONE virtual machine per physical host with a NVidia GPU card installed. This is an unsupported setup, but will give you an idea of what functions and features are coming to OpenShift Virtualization in the coming releases.
 
 ## Prerequisites
@@ -20,7 +43,7 @@ Once the debug node is up, we need to run a lspci:
 
 ```
 $ chroot /host
-$ lspci
+$ lspci -nn
 04:00.0 VGA compatible controller [0300]: NVIDIA Corporation GK208B [GeForce GT 710] [10de:128b] (rev a1)
 04:00.1 Audio device [0403]: NVIDIA Corporation GK208 HDMI/DP Audio Controller [10de:0e0f] (rev a1)
 09:00.0 3D controller [0302]: NVIDIA Corporation GV100GL [Tesla V100 PCIe 16GB] [10de:1db4] (rev a1)
@@ -69,13 +92,19 @@ GPU Passthrough to virtualized machines is not yet supported in OpenShift Viruta
 ### Install Kubevirt from upstream 
 
 ```
-# Pick an upstream version of KubeVirt to install
-$ export RELEASE=v0.37.1
+# get the latest release of kubevirt
+$ export RELEASE=$(curl -s https://github.com/kubevirt/kubevirt/releases/latest | grep -o "v[0-9]\.[0-9]*\.[0-9]*")
+$ echo $RELEASE
+# Ensure that the release is the one you want to install
 # Deploy the KubeVirt operator
 $ oc apply -f https://github.com/kubevirt/kubevirt/releases/download/${RELEASE}/kubevirt-operator.yaml
 ```
 
-We will create a custom kubevirt-cr to deploy kubevirt into our cluster. This will allow us to enable the GPU feature gate as well as enable the kubevirt device manager to handle the GPU device we are going to pass through. Create kubevirt-cr.yaml with contents below. For each card type you want to support create a new pciVendorSelector section. The resourceName is arbitrary, but should reflect the card you are connecting to, to simplify things down the line. The below code shows two devices configured.
+This will create a new namespace called "kubevirt" and install the required CRDs.  
+
+Once the operator has been applied we can go ahead and create our kubevirt custom-resource instance. This will allow us to enable the GPU feature gate as well as enable the kubevirt device manager to handle the GPU device we are going to pass through.
+
+Edit the file templates/kubevirt-cr.yaml, updating the section permittedHostDevices and update the host devices to match what you have. For each card type you want to support create a new pciVendorSelector section. The resourceName is arbitrary, but should reflect the card you are configuring. Below is an example of configuring more than one device type:
 
 ```
 permittedHostDevices:
@@ -91,7 +120,7 @@ permittedHostDevices:
 Now we will apply the configuration and wait for the install/configuration to complete:
 
 ```
-$ oc apply -f kubevirt-cr.yaml
+$ oc apply -f templates/kubevirt-cr.yaml
 # wait until all KubeVirt components are up
 $ oc -n kubevirt wait kv kubevirt --for condition=Available
 ```
@@ -132,17 +161,18 @@ Allocated resources:
 
 ### Install CDI Importer
 
-The Containerized Data Importer (CDI) is used to help make virtual machine creation from ISO files easier. We will install the CDI operator directly from github using the steps below: 
+The Containerized Data Importer (CDI) is used to help make virtual machine creation from ISO files easier. We will install the CDI operator directly from github using the steps below. They will create a namespace called "cdi", install the operator in that namespace and then create an instance of the CDI service running in the cdi namespace. It will also create a service and a route so that you can access the service later in the install process.
 
 ```
 $ export VERSION=$(curl -s https://github.com/kubevirt/containerized-data-importer/releases/latest | grep -o "v[0-9]\.[0-9]*\.[0-9]*")
 $ oc create -f https://github.com/kubevirt/containerized-data-importer/releases/download/$VERSION/cdi-operator.yaml
 $ oc create -f https://github.com/kubevirt/containerized-data-importer/releases/download/$VERSION/cdi-cr.yaml
+oc -n cdi wait cdi cdi --for condition=Available
 ```
 
-## Setup Storage 
+## Setup Storage
 
-You will need storage to run your vm from. This can be done with any CSI storage provider. The notes below are for setting up NFS or hostPath provisioner. 
+You will need storage to run your virtual machines. If you have already configured persistent storage for your cluster you can skip these steps and move onto the [Create new VM](#create-new-vm) step. Notes below are for setting up NFS or hostPath provisioner.
 
 ### NFS Client Storage
 
@@ -201,7 +231,7 @@ metadata:
 spec:
   imagePullPolicy: IfNotPresent
   pathConfig:
-    path: "/var/localstorage" 
+    path: "/var/hpvolumes" 
     useNamingPrefix: "false"
 ```
 
