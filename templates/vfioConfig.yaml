@@ -22,3 +22,5 @@ spec:
             mode: 0644
             overwrite: true
             path: /etc/modules-load.d/gpu-vfio.conf
+    kernelArguments:
+      - 'intel_iommu=on'

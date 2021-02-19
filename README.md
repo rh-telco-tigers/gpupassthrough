@@ -9,6 +9,7 @@
   - [Prerequisites](#prerequisites)
   - [Configuring the bare metal GPU hosts for Passthrough](#configuring-the-bare-metal-gpu-hosts-for-passthrough)
     - [Creating vfioConfig for pci passthrough](#creating-vfioconfig-for-pci-passthrough)
+    - [Validate proper node configuration](#validate-proper-node-configuration)
   - [Install upstream kubevirt](#install-upstream-kubevirt)
     - [Install Kubevirt from upstream](#install-kubevirt-from-upstream)
     - [Install CDI Importer](#install-cdi-importer)
@@ -83,6 +84,30 @@ $ oc login <cluster name>
 $ oc create -f vfioConfig.yaml
 $ oc get machineconfigpool
 # WAIT for worker to have all machinecounts updated
+```
+
+### Validate proper node configuration
+
+Once all the nodes have rebooted, use the debug pod to check the drivers loaded for your cards:
+
+```
+oc get nodes
+# find the node name of the hardware with GPUs
+oc debug node/<node name>
+```
+
+Once the debug node is up, we need to run a lspci:
+
+```
+$ chroot /host
+$ lspci -nnk -d 10de:
+1a:00.0 VGA compatible controller [0300]: NVIDIA Corporation TU102GL [Quadro RTX 6000/8000] [10de:1e30] (rev a1)
+	Subsystem: NVIDIA Corporation Quadro RTX 8000 [10de:129e]
+	Kernel driver in use: vfio-pci
+# ensure that the target card has the vfio_pci driver attached.
+$ dmesg | grep IOMMU 
+[ 000000] DMAR: IOMMU enabled
+# ensure that IOMMU is enabled
 ```
 
 ## Install upstream kubevirt
