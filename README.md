@@ -56,11 +56,11 @@ In the above example, the PCI id we are looking for is "10de:1db4". Record this 
 
 Now that we have identified all the PCI ids that identify the cards we want to run in passthrough, we need to configure our OpenShift cluster to specifically assign the "vfio" driver to the card. To do this we will apply a machineConfig to our cluster that specifically assigns the vfio driver to the associated GPU card.
 
-We are going to create a base64 encoded string which we will put in our machineConfig file. To do this, run the following command with the VendorID(s) that you want to put into passthrough mode. Be sure to put the vendor IDs in using CAPITAL letters only:
+We are going to create a base64 encoded string which we will put in our machineConfig file. To do this, run the following command with the VendorID(s) that you want to put into passthrough mode. Be sure to put the vendor IDs in using lowercase letters only:
 
 ```
-$ echo "options vfio-pci ids=10DE:1DB4" | base64
-b3B0aW9ucyB2ZmlvLXBjaSBpZHM9MTBERToxREI0Cg==
+$ echo "options vfio-pci ids=10de:1db4" | base64
+b3B0aW9ucyB2ZmlvLXBjaSBpZHM9MTBkZToxZGI0Cg==
 ```
 
 Using the base64 output from above update the storage section of the file called "template/vfioConfig.yaml" replacing the example base64 encoded string with the updated one from above.
@@ -73,7 +73,7 @@ storage:
           data:text/plain;charset=utf-8;base64,b3B0aW9ucyB2ZmlvLXBjaSBpZHM9MTBkZToxZGI0Cg==
 ```
 
-Be sure to update the contents source with the base64 string you got from the prior step.
+Be sure to update the contents source with the base64 string you got from the prior step. In addition to enabling the vfio drivers we need to ensure that IOMMO is enabled for the worker nodes. Depedning on your CPU brand (AMD or Intel) update the kernelArguments section to enable IOMMU for your particular processor.
 
 Log into your cluster with the oc command and then apply the vfioConfig.yaml file to your cluster:
 
@@ -190,9 +190,12 @@ The Containerized Data Importer (CDI) is used to help make virtual machine creat
 
 ```
 $ export VERSION=$(curl -s https://github.com/kubevirt/containerized-data-importer/releases/latest | grep -o "v[0-9]\.[0-9]*\.[0-9]*")
+$ echo $VERSION
 $ oc create -f https://github.com/kubevirt/containerized-data-importer/releases/download/$VERSION/cdi-operator.yaml
 $ oc create -f https://github.com/kubevirt/containerized-data-importer/releases/download/$VERSION/cdi-cr.yaml
-oc -n cdi wait cdi cdi --for condition=Available
+$ oc -n cdi wait cdi cdi --for condition=Available
+# get the route for the CDI service. record this for later
+$ oc -n cdi get routes
 ```
 
 ## Setup Storage
@@ -205,11 +208,19 @@ Clone this: https://github.com/kubernetes-sigs/nfs-subdir-external-provisioner
 
 ```
 $ oc new-project nfs-provisioner
-$ NAMESPACE=`oc project -q`
+$ export NAMESPACE=`oc project -q`
 $ sed -i'' "s/namespace:.*/namespace: $NAMESPACE/g" ./deploy/rbac.yaml
 $ oc create -f deploy/rbac.yaml
 $ oc create role use-scc-hostmount-anyuid --verb=use --resource=scc --resource-name=hostmount-anyuid -n $NAMESPACE
-$ oc adm policy add-role-to-user use-scc-hostmount-anyuid system:serviceaccount:$NAMESPACE:nfs-client-provisioner
+$ oc adm policy add-role-to-user use-scc-hostmount-anyuid system:serviceaccount:$NAMESPACE:nfs-client-provisioner -n $NAMESPACE
+$ oc adm policy add-scc-to-user hostmount-anyuid -z nfs-client-provisioner
+```
+
+Edit the deploy/deployment.yaml and update with your server information and be sure to also update the namespace you are running the provisioner in.
+
+```
+oc create -f deploy/deployment.yaml
+oc create -f deploy/class.yaml
 ```
 
 ### HostPath Provisoner
@@ -270,10 +281,16 @@ set annotation on storage class "storageclass.kubernetes.io/is-default-class: tr
 ## Create new VM
 
 We will start by uploading a ISO boot cd to our cluster. We will use the virtctl command to upload the ISO image. This requires that you installed the CDI operator in previous steps.
+You can download the virtctl command from the [kubevirt github repo](https://github.com/kubevirt/kubevirt/releases)
 
 ```
-$ virtctl image-upload --uploadproxy-url=https://cdi-uploadproxy-openshift-cnv.apps.ocp4rhv.example.com dv iso-win10-dv --size=4Gi --image-path=/home/markd/en_windows_10_multiple_editions_x64_dvd_6846432.iso --insecure
+$ oc new-project myvms
+$ virtctl image-upload --uploadproxy-url=https://cdi-uploadproxy-cdi.apps.ocp4rhv.example.com dv iso-win10-dv --size=5Gi --image-path=/home/markd/en_windows_10_multiple_editions_x64_dvd_6846432.iso --insecure
 ```
+
+virtctl image-upload --pvc-name=iso-win2k12
+
+
 
 Using the file "templates/win10vm1-pvc.yaml" create a PVC to store your virtual machine hard disk on, updating your required disk size and storageClass you want to use.
 

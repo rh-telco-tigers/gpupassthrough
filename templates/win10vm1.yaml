@@ -2,7 +2,6 @@ apiVersion: kubevirt.io/v1alpha3
 kind: VirtualMachine
 metadata:
   name: win10vm1
-  namespace: my-vms
 spec:
   running: false
   template:
@@ -37,9 +36,10 @@ spec:
           - bootOrder: 1
             cdrom:
               bus: sata
-            name: cdromiso
-          - disk:
-              bus: sata
+            name: cdrom
+          - bootOrder: 2
+            disk:
+              bus: virtio
             name: disk-1
           inputs:
           - bus: usb
