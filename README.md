@@ -225,6 +225,8 @@ oc create -f deploy/class.yaml
 
 ### HostPath Provisoner
 
+Clone this: https://github.com/kubevirt/hostpath-provisioner.git
+
 use oc debug node/<node name>
 - chroot /host
 - mkdir /var/hpvolumes
@@ -271,7 +273,7 @@ spec:
     useNamingPrefix: "false"
 ```
 
-oc create -f hostpathprovisioner_cr.yaml -n openshift-cnv
+oc create -f hostpathprovisioner_cr.yaml -n kubevirt
 
 OPTIONAL: set the hostpath-provisioner as the default storage class
 set annotation on storage class "storageclass.kubernetes.io/is-default-class: true"
@@ -285,12 +287,11 @@ You can download the virtctl command from the [kubevirt github repo](https://git
 
 ```
 $ oc new-project myvms
+# Get the cdi route
+$ oc -n cdi get routes
+# update the url below to point to the output from the get routes command above
 $ virtctl image-upload --uploadproxy-url=https://cdi-uploadproxy-cdi.apps.ocp4rhv.example.com dv iso-win10-dv --size=5Gi --image-path=/home/markd/en_windows_10_multiple_editions_x64_dvd_6846432.iso --insecure
 ```
-
-virtctl image-upload --pvc-name=iso-win2k12
-
-
 
 Using the file "templates/win10vm1-pvc.yaml" create a PVC to store your virtual machine hard disk on, updating your required disk size and storageClass you want to use.
 
@@ -312,5 +313,10 @@ If you enable RDP from within the WIndows VIrtual machine, it is possible to dir
 
 ```
 $ virtctl expose virtualmachine win10vm1 --name windows-app-server-rdp --port 3389 --target-port 3389 --type NodePort
+$ oc get svc
+NAME                     TYPE       CLUSTER-IP     EXTERNAL-IP   PORT(S)          AGE
+windows-app-server-rdp   NodePort   172.30.44.89   <none>        3389:30239/TCP   9s
 ```
+
+Now open your favorite RDP tool and connect to ANY worker node IP address on the highport number in the above output (eg. 30239)
 
