@@ -7,5 +7,5 @@ spec:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 35Gi
+      storage: 70Gi
   storageClassName: managed-nfs-storage

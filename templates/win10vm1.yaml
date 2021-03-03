@@ -71,10 +71,10 @@ spec:
       volumes:
         - name: cdrom
           persistentVolumeClaim:
-            claimName: iso-win10
+            claimName: iso-win10-dv
         - name: disk-1
           persistentVolumeClaim:
             claimName: winhd1
         - containerDisk:
-            image: kubevirt/virtio-container-disk
+            image: quay.io/kubevirt/virtio-container-disk
           name: windows-guest-tools

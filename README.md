@@ -15,7 +15,7 @@
     - [Install CDI Importer](#install-cdi-importer)
   - [Setup Storage](#setup-storage)
     - [NFS Client Storage](#nfs-client-storage)
-    - [HostPath Provisoner](#hostpath-provisoner)
+    - [HostPath Provisioner](#hostpath-provisioner)
 - [Deploying a Windows VM](#deploying-a-windows-vm)
   - [Create new VM](#create-new-vm)
   - [Windows 10 needs to be updated before the driver will install](#windows-10-needs-to-be-updated-before-the-driver-will-install)
@@ -52,6 +52,16 @@ $ lspci -nn
 
 In the above example, the PCI id we are looking for is "10de:1db4". Record this information for each card type you plan to use.
 
+NOTE: If you are using a card that has subfunctions on it you need to ensure that ALL sub funtions are also configured for passthrough. Below is output that shows an example of a card that has multiple functions. For the example card below you would need to configure "10de:1e30,10de:10f7,10de:1ad6,10de:1ad7" for vfio passthrough in the Creating [vfioConfig for pci passthrough](#creating-vfioconfig-for-pci-passthrough) step.
+
+```
+# lspci -nn | grep -i nvidia
+1a:00.0 VGA compatible controller [0300]: NVIDIA Corporation TU102GL [Quadro RTX 6000/8000] [10de:1e30] (rev a1)
+1a:00.1 Audio device [0403]: NVIDIA Corporation TU102 High Definition Audio Controller [10de:10f7] (rev a1)
+1a:00.2 USB controller [0c03]: NVIDIA Corporation TU102 USB 3.1 Host Controller [10de:1ad6] (rev a1)
+1a:00.3 Serial bus controller [0c80]: NVIDIA Corporation TU102 USB Type-C UCSI Controller [10de:1ad7] (rev a1)
+```
+
 ### Creating vfioConfig for pci passthrough
 
 Now that we have identified all the PCI ids that identify the cards we want to run in passthrough, we need to configure our OpenShift cluster to specifically assign the "vfio" driver to the card. To do this we will apply a machineConfig to our cluster that specifically assigns the vfio driver to the associated GPU card.
@@ -73,7 +83,7 @@ storage:
           data:text/plain;charset=utf-8;base64,b3B0aW9ucyB2ZmlvLXBjaSBpZHM9MTBkZToxZGI0Cg==
 ```
 
-Be sure to update the contents source with the base64 string you got from the prior step. In addition to enabling the vfio drivers we need to ensure that IOMMO is enabled for the worker nodes. Depedning on your CPU brand (AMD or Intel) update the kernelArguments section to enable IOMMU for your particular processor.
+Be sure to update the contents source with the base64 string you got from the prior step. In addition to enabling the vfio drivers we need to ensure that IOMMO is enabled for the worker nodes. Depending on your CPU brand (AMD or Intel) update the kernelArguments section to enable IOMMU for your particular processor.
 
 Log into your cluster with the oc command and then apply the vfioConfig.yaml file to your cluster:
 
@@ -110,11 +120,13 @@ $ dmesg | grep IOMMU
 # ensure that IOMMU is enabled
 ```
 
+If you have a card with multiple functions, ensure that all functions have the vfio driver loaded for the function.
+
 ## Install upstream kubevirt
 
-GPU Passthrough to virtualized machines is not yet supported in OpenShift Virutalization. It will be supported with an upcoming release. In the mean time, in order to try out this functionality we will leverage the upstream "kubevirt" project to enable PCI passthrough.
+GPU Passthrough to virtualized machines is not yet supported in OpenShift Virtualization. It will be supported with an upcoming release. In the mean time, in order to try out this functionality we will leverage the upstream "kubevirt" project to enable PCI passthrough.
 
-### Install Kubevirt from upstream 
+### Install Kubevirt from upstream
 
 ```
 # get the latest release of kubevirt
@@ -223,7 +235,7 @@ oc create -f deploy/deployment.yaml
 oc create -f deploy/class.yaml
 ```
 
-### HostPath Provisoner
+### HostPath Provisioner
 
 Clone this: https://github.com/kubevirt/hostpath-provisioner.git
 
@@ -319,4 +331,3 @@ windows-app-server-rdp   NodePort   172.30.44.89   <none>        3389:30239/TCP 
 ```
 
 Now open your favorite RDP tool and connect to ANY worker node IP address on the highport number in the above output (eg. 30239)
-
