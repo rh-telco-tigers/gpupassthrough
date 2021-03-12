@@ -22,21 +22,23 @@ spec:
             mode: 0644
             overwrite: true
             path: /etc/modules-load.d/gpu-kvmgt.conf
-    systemd:
-      units:
-        - contents: |
-            [Unit]
-            Description=Create Intel GVT-g vGPU
+      systemd:
+        units:
+          - contents: |
+              [Unit]
+              Description=Create Intel GVT-g vGPU
 
-            [Service]
-            Type=oneshot
-            ExecStart=/bin/sh -c "echo '56a4c4e2-c81f-4cba-82bf-af46c30ea32d' > /sys/devices/pci0000:00/0000:00:02.0/mdev_supported_types/i915-GVTg_V5_8/create"
-            ExecStart=/bin/sh -c "echo '973069b7-2025-406b-b3c9-301016af3150' > /sys/devices/pci0000:00/0000:00:02.0/mdev_supported_types/i915-GVTg_V5_8/create"
-            ExecStop=/bin/sh -c "echo '1' > /sys/devices/pci0000:00/0000:00:02.0/56a4c4e2-c81f-4cba-82bf-af46c30ea32d/remove"
-            ExecStop=/bin/sh -c "echo '1' > /sys/devices/pci0000:00/0000:00:02.0/973069b7-2025-406b-b3c9-301016af3150/remove"
-            RemainAfterExit=yes
+              [Service]
+              Type=oneshot
+              ExecStart=/bin/sh -c "echo '56a4c4e2-c81f-4cba-82bf-af46c30ea32d' > /sys/devices/pci0000:00/0000:00:02.0/mdev_supported_types/i915-GVTg_V5_8/create"
+              ExecStart=/bin/sh -c "echo '973069b7-2025-406b-b3c9-301016af3150' > /sys/devices/pci0000:00/0000:00:02.0/mdev_supported_types/i915-GVTg_V5_8/create"
+              ExecStop=/bin/sh -c "echo '1' > /sys/devices/pci0000:00/0000:00:02.0/56a4c4e2-c81f-4cba-82bf-af46c30ea32d/remove"
+              ExecStop=/bin/sh -c "echo '1' > /sys/devices/pci0000:00/0000:00:02.0/973069b7-2025-406b-b3c9-301016af3150/remove"
+              RemainAfterExit=yes
 
-            [Install]
-            WantedBy=multi-user.target
+              [Install]
+              WantedBy=multi-user.target
+            enabled: true
+            name: intelgvtg.service
     kernelArguments:
       - 'intel_iommu=on'
