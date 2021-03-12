@@ -13,7 +13,7 @@ spec:
       - LiveMigration
     permittedHostDevices:
       mediatedDevices:
-      - mdevNameSelector: "i915-GVTg_V5_4"
+      - mdevNameSelector: "i915-GVTg_V5_8"
         resourceName: "intel.com/U630"
   customizeComponents: {}
-  imagePullPolicy: IfNotPresent
+  imagePullPolicy: Always
