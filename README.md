@@ -122,20 +122,20 @@ If you have a card with multiple functions, ensure that all functions have the v
 
 ## Install OpenShift Virtualization
 
-Follow standard [OpenShift Virtualization Install docs]https://docs.openshift.com/container-platform/4.7/virt/install/installing-virt-web.html) and return here when the default install is complete.
+Follow standard [OpenShift Virtualization Install docs](https://docs.openshift.com/container-platform/4.7/virt/install/installing-virt-web.html) and return here when the default install is complete.
 
 We now need to update the configuration for OpenShift Virtualization to enable the support for GPU and device management. We will edit the kubevirt-config:
 
 oc edit cm kubevirt-config -n openshift-cnv
 
-We need to update one line and then add a new section to the configuarion. First update the "feature-gates" line and add ",GPU" to the end of this line:
+We need to update one line and then add a new section to the configuration. First update the "feature-gates" line and add ",GPU" to the end of this line:
 
 The feature-gates line should now look like this:
 ```
   feature-gates: DataVolumes,SRIOV,LiveMigration,CPUManager,CPUNodeDiscovery,Snapshot,GPU
 ```
 
-We now need to add a new configuration section. This section will enable OpenShift Virtualization to manage any physical GPU cards you may have within your compute nodes. Add the "permittedHostDevices" section of yaml to your configuration. Be sure to update the pciVendorSelector and resourceName appropirately for your specific hardware.
+We now need to add a new configuration section. This section will enable OpenShift Virtualization to manage any physical GPU cards you may have within your compute nodes. Add the "permittedHostDevices" section of yaml to your configuration. Be sure to update the pciVendorSelector and resourceName appropriately for your specific hardware.
 
 ```
 data:
