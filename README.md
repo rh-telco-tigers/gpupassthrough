@@ -24,7 +24,7 @@
 
 ## Introduction
 
-It is possible to support video card GPU passthrough using OpenShift and Kubevirt (upstream OpenShift Virtualization). The instructions below will help create a configuration that allows for running ONE virtual machine per physical host with a NVidia GPU card installed. This is an unsupported setup, but will give you an idea of what functions and features are coming to OpenShift Virtualization in the coming releases.
+It is possible to support video card GPU passthrough using OpenShift and OpenShift Virtualization. The instructions below will help create a configuration that allows for running ONE virtual machine per physical NVidia GPU available. This is an unsupported setup, but will give you an idea of what functions and features are coming to OpenShift Virtualization in the coming releases.
 
 ## Prerequisites
 
@@ -122,93 +122,74 @@ $ dmesg | grep IOMMU
 
 If you have a card with multiple functions, ensure that all functions have the vfio driver loaded for the function.
 
-## Install upstream kubevirt
+## Install OpenShift Virtualization
 
-GPU Passthrough to virtualized machines is not yet supported in OpenShift Virtualization. It will be supported with an upcoming release. In the mean time, in order to try out this functionality we will leverage the upstream "kubevirt" project to enable PCI passthrough.
+Follow standard [OpenShift Virtualization Install docs]https://docs.openshift.com/container-platform/4.7/virt/install/installing-virt-web.html) and return here when the default install is complete.
 
-### Install Kubevirt from upstream
+We now need to update the configuration for OpenShift Virtualization to enable the support for GPU and device management. We will edit the kubevirt-config:
 
+oc edit cm kubevirt-config -n openshift-cnv
+
+We need to update one line and then add a new section to the configuarion. First update the "feature-gates" line and add ",GPU" to the end of this line:
+
+The feature-gates line should now look like this:
 ```
-# get the latest release of kubevirt
-$ export RELEASE=$(curl -s https://github.com/kubevirt/kubevirt/releases/latest | grep -o "v[0-9]\.[0-9]*\.[0-9]*")
-$ echo $RELEASE
-# Ensure that the release is the one you want to install
-# Deploy the KubeVirt operator
-$ oc apply -f https://github.com/kubevirt/kubevirt/releases/download/${RELEASE}/kubevirt-operator.yaml
-```
-
-This will create a new namespace called "kubevirt" and install the required CRDs.  
-
-Once the operator has been applied we can go ahead and create our kubevirt custom-resource instance. This will allow us to enable the GPU feature gate as well as enable the kubevirt device manager to handle the GPU device we are going to pass through.
-
-Edit the file templates/kubevirt-cr.yaml, updating the section permittedHostDevices and update the host devices to match what you have. For each card type you want to support create a new pciVendorSelector section. The resourceName is arbitrary, but should reflect the card you are configuring. Below is an example of configuring more than one device type:
-
-```
-permittedHostDevices:
-  pciHostDevices:
-  - pciVendorSelector: "10DE:1DB4"
-    resourceName: "nvidia.com/V100"
-    externalResourceProvider: false
-  - pciVendorSelector: "10DE:1234"
-    resourceName: "nvidia.com/AnotherCardType"
-    externalResourceProvider: false
+  feature-gates: DataVolumes,SRIOV,LiveMigration,CPUManager,CPUNodeDiscovery,Snapshot,GPU
 ```
 
-Now we will apply the configuration and wait for the install/configuration to complete:
+We now need to add a new configuration section. This section will enable OpenShift Virtualization to manage any physical GPU cards you may have within your compute nodes. Add the "permittedHostDevices" section of yaml to your configuration. Be sure to update the pciVendorSelector and resourceName appropirately for your specific hardware.
 
 ```
-$ oc apply -f templates/kubevirt-cr.yaml
-# wait until all KubeVirt components are up
-$ oc -n kubevirt wait kv kubevirt --for condition=Available
+data:
+  permittedHostDevices: |-
+    pciHostDevices:
+    - pciVendorSelector: "10DE:1DB4"
+      resourceName: "nvidia.com/V100"
+      externalResourceProvider: false
 ```
 
-To validate that the kubevirt device manager has successfully configured/recognized the cards, run the following oc command and look for the "resourceName" to be listed in the "Capacity" section and the "Allocatable" section as shown below:
+The completed kuebvirt-config should look similar to this:
 
 ```
-$ oc describe node/node6.ocp4rhv.example.com
-Name:               node6.ocp4rhv.example.com
-Roles:              worker
-Labels:             beta.kubernetes.io/arch=amd64
-...
+apiVersion: v1
+data:
+  default-network-interface: masquerade
+  feature-gates: DataVolumes,SRIOV,LiveMigration,CPUManager,CPUNodeDiscovery,Snapshot,GPU
+  machine-type: pc-q35-rhel8.3.0
+  permittedHostDevices: |-
+    pciHostDevices:
+    - pciVendorSelector: "10DE:1DB4"
+      resourceName: "nvidia.com/V100"
+      externalResourceProvider: false
+  selinuxLauncherType: virt_launcher.process
+  smbios: |-
+    Family: Red Hat
+    Product: Container-native virtualization
+    Manufacturer: Red Hat
+    Sku: 2.6.1
+    Version: 2.6.1
+kind: ConfigMap
+```
+
+Save your changes and OpenShift Virtualization will update. Check to ensure that your hardware was recognized by describing a node with a GPU card installed:
+
+```
+$ oc describe node/<node  with gpu card>
+  Hostname:    node11.ocp4.example.com
 Capacity:
-  cpu:                            32
-  memory:                         131924860Ki
+  cpu:                            40
+  devices.kubevirt.io/kvm:        110
+  devices.kubevirt.io/tun:        110
+  devices.kubevirt.io/vhost-net:  110
+  ephemeral-storage:              975672300Ki
+  hugepages-1Gi:                  0
+  hugepages-2Mi:                  0
+  memory:                         131620192Ki
   nvidia.com/V100:                1
   pods:                           250
-Allocatable:
-  cpu:                            31500m
-  memory:                         130773884Ki
-  nvidia.com/V100:                1
-  pods:                           250
-...
-Allocated resources:
-  (Total limits may be over 100 percent, i.e., overcommitted.)
-  Resource                       Requests     Limits
-  --------                       --------     ------
-  cpu                            404m (1%)    0 (0%)
-  memory                         1520Mi (1%)  512Mi (0%)
-  ephemeral-storage              0 (0%)       0 (0%)
-  hugepages-1Gi                  0 (0%)       0 (0%)
-  hugepages-2Mi                  0 (0%)       0 (0%)
-  devices.kubevirt.io/kvm        0            0
-  devices.kubevirt.io/tun        0            0
-  devices.kubevirt.io/vhost-net  0            0
-  nvidia.com/V100                0            0
 ```
 
-### Install CDI Importer
-
-The Containerized Data Importer (CDI) is used to help make virtual machine creation from ISO files easier. We will install the CDI operator directly from github using the steps below. They will create a namespace called "cdi", install the operator in that namespace and then create an instance of the CDI service running in the cdi namespace. It will also create a service and a route so that you can access the service later in the install process.
-
-```
-$ export VERSION=$(curl -s https://github.com/kubevirt/containerized-data-importer/releases/latest | grep -o "v[0-9]\.[0-9]*\.[0-9]*")
-$ echo $VERSION
-$ oc create -f https://github.com/kubevirt/containerized-data-importer/releases/download/$VERSION/cdi-operator.yaml
-$ oc create -f https://github.com/kubevirt/containerized-data-importer/releases/download/$VERSION/cdi-cr.yaml
-$ oc -n cdi wait cdi cdi --for condition=Available
-# get the route for the CDI service. record this for later
-$ oc -n cdi get routes
-```
+Note that the capacity of this node has nvidia.com/V100 with a capacity of 1.
 
 ## Setup Storage
 
